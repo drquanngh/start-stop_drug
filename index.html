@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ICU START/STOPP Tool - Người Cao Tuổi</title>
+    <!-- Tailwind CSS để giao diện hiện đại, sạch sẽ -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>
+        .crit-high { border-left: 4px solid #ef4444; }
+        .crit-med { border-left: 4px solid #f59e0b; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans antialiased">
+
+    <!-- Header -->
+    <header class="bg-blue-900 text-white shadow-md sticky top-0 z-50">
+        <div class="max-w-5xl mx-auto px-4 py-4 flex justify-between items-center">
+            <div>
+                <h1 class="text-xl font-bold flex items-center gap-2">
+                    <span>🩺</span> ICU START/STOPP Navigator
+                </h1>
+                <p class="text-xs text-blue-200">Công cụ rà soát thuốc tối ưu cho Hồi sức & Cấp cứu Lão khoa</p>
+            </div>
+            <div class="bg-blue-800 px-3 py-1 rounded text-xs font-mono border border-blue-700">
+                v2.0-ICU
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-5xl mx-auto px-4 py-6">
+        <!-- Bộ lọc hệ cơ quan -->
+        <div class="mb-6 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+            <label class="block text-sm font-semibold text-gray-600 mb-2">Chọn hệ cơ quan cần rà soát:</label>
+            <div class="flex flex-wrap gap-2" id="system-filters">
+                <button onclick="filterSystem('ALL')" id="btn-all" class="px-3 py-1.5 rounded-lg text-sm font-medium transition bg-blue-600 text-white shadow-sm">
+                    Tất cả hệ cơ quan
+                </button>
+                <!-- Các nút hệ cơ quan sẽ được tự động render từ JS -->
+            </div>
+        </div>
+
+        <!-- Layout chính: Hai cột START và STOPP -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            <!-- CỘT STOPP -->
+            <div class="space-y-4">
+                <div class="bg-red-50 text-red-800 p-4 rounded-xl border border-red-200 flex items-center justify-between shadow-sm">
+                    <h2 class="font-bold text-lg flex items-center gap-2">🛑 STOPP (Dừng/Tránh)</h2>
+                    <span id="stopp-count" class="bg-red-600 text-white text-xs px-2.5 py-0.5 rounded-full font-bold">0</span>
+                </div>
+                <div id="stopp-container" class="space-y-3">
+                    <!-- Danh sách STOPP hiển thị ở đây -->
+                </div>
+            </div>
+
+            <!-- CỘT START -->
+            <div class="space-y-4">
+                <div class="bg-green-50 text-green-800 p-4 rounded-xl border border-green-200 flex items-center justify-between shadow-sm">
+                    <h2 class="font-bold text-lg flex items-center gap-2">🟢 START (Bắt đầu/Bổ sung)</h2>
+                    <span id="start-count" class="bg-green-600 text-white text-xs px-2.5 py-0.5 rounded-full font-bold">0</span>
+                </div>
+                <div id="start-container" class="space-y-3">
+                    <!-- Danh sách START hiển thị ở đây -->
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <footer class="text-center py-8 text-gray-400 text-xs border-t border-gray-100 mt-12">
+        Thiết kế tối ưu cho môi trường cấp cứu lâm sàng giường bệnh.
+    </footer>
+
+    <!-- DỮ LIỆU & LOGIC ĐIỀU HƯỚNG APP -->
+    <script>
+        // Cơ sở dữ liệu START/STOPP tinh chỉnh cho môi trường hồi sức cấp cứu
+        const criteriaData = [
+            // --- HỆ TIM MẠCH ---
+            {
+                id: "ST-CV1",
+                type: "STOPP",
+                system: "Tim mạch",
+                title: "Aspirin dự phòng tiên phát",
+                desc: "Dừng Aspirin nếu không có bằng chứng bệnh lý mạch vành, mạch não hoặc mạch máu ngoại vi rõ ràng.",
+                icu_note: "Tránh nguy cơ xuất huyết tiêu hóa không đáng có trong ICU.",
+                priority: "HIGH"
+            },
+            {
+                id: "ST-CV2",
+                type: "STOPP",
+                system: "Tim mạch",
+                title: "Lợi tiểu quai trị phù ngoại vi đơn thuần",
+                desc: "Không dùng lợi tiểu quai kéo dài nếu phù chân do suy tĩnh mạch hoặc không có tình trạng quá tải thể tích.",
+                icu_note: "Tránh nguy cơ rối loạn điện giải và tụt huyết áp tư thế.",
+                priority: "MED"
+            },
+            {
+                id: "SR-CV1",
+                type: "START",
+                system: "Tim mạch",
+                title: "Kháng đông trong Rung nhĩ",
+                desc: "Bắt đầu kháng đông đường uống khi có rung nhĩ mạn tính hoặc kịch phát nếu thang điểm CHA2DS2-VASc cao.",
+                icu_note: "Cần đánh giá kỹ nguy cơ chảy máu HAS-BLED trước khi khởi động lại tại ICU.",
+                priority: "HIGH"
+            },
+            
+            // --- HỆ THẦN KINH / TÂM THẦN ---
+            {
+                id: "ST-NS1",
+                type: "STOPP",
+                system: "Thần kinh",
+                title: "Benzodiazepines",
+                desc: "Tránh dùng an thần nhóm Benzodiazepines trừ khi có chỉ định bắt buộc như mê sảng do cai rượu.",
+                icu_note: "Làm tăng tỷ lệ, kéo dài thời gian Mê sảng (Delirium) trong ICU và tăng nguy cơ suy hô hấp.",
+                priority: "HIGH"
+            },
+            {
+                id: "ST-NS2",
+                type: "STOPP",
+                system: "Thần kinh",
+                title: "Thuốc kháng Cholinergic",
+                desc: "Tránh các thuốc có hoạt tính kháng cholinergic mạnh (như kháng histamine thế hệ 1, một số thuốc chống trầm cảm 3 vòng).",
+                icu_note: "Gây bí tiểu, khô miệng, táo bón và trầm trọng thêm tình trạng lú lẫn cấp.",
+                priority: "HIGH"
+            },
+
+            // --- HỆ TIÊU HÓA / THẬN ---
+            {
+                id: "ST-GI1",
+                type: "STOPP",
+                system: "Tiêu hóa",
+                title: "NSAID kéo dài không bảo vệ dạ dày",
+                desc: "Tránh dùng NSAID kéo dài trừ khi có kết hợp PPI để bảo vệ niêm mạc.",
+                icu_note: "Nguy cơ gây suy thận cấp (AKI) phối hợp và xuất huyết tiêu hóa cao trong hồi sức.",
+                priority: "HIGH"
+            },
+            {
+                id: "SR-GI1",
+                type: "START",
+                system: "Tiêu hóa",
+                title: "Dự phòng loét do stress (Stress Ulcer Prophylaxis)",
+                desc: "Sử dụng PPI hoặc H2RA cho bệnh nhân có yếu tố nguy cơ cao (thở máy lớn hơn 48h, rối loạn đông máu).",
+                icu_note: "Ngừng ngay khi hết yếu tố nguy cơ để tránh viêm phổi bệnh viện (VAP).",
+                priority: "HIGH"
+            },
+
+            // --- HỆ CƠ XƯƠNG KHỚP / NỘI TIẾT ---
+            {
+                id: "SR-ED1",
+                type: "START",
+                system: "Nội tiết",
+                title: "Bổ sung Vitamin D và Canxi khi dùng Corticoid",
+                desc: "Bắt đầu điều trị dự phòng loãng xương ở bệnh nhân sử dụng Corticoid toàn thân liên tục lớn hơn 3 tháng.",
+                icu_note: "Dành cho giai đoạn chuẩn bị ra viện hoặc chuyển khoa.",
+                priority: "MED"
+            }
+        ];
+
+        let currentSystem = "ALL";
+
+        // Khởi tạo và tạo danh sách các nút lọc hệ cơ quan tự động
+        function initFilters() {
+            const filterContainer = document.getElementById('system-filters');
+            const systems = [...new Set(criteriaData.map(item => item.system))];
+            
+            systems.forEach(sys => {
+                const btn = document.createElement('button');
+                btn.id = `btn-${sys}`;
+                btn.className = "px-3 py-1.5 rounded-lg text-sm font-medium transition bg-gray-100 text-gray-600 hover:bg-gray-200";
+                btn.innerText = sys;
+                btn.onclick = () => filterSystem(sys);
+                filterContainer.appendChild(btn);
+            });
+        }
+
+        // Thực hiện lọc dữ liệu hiển thị
+        function filterSystem(system) {
+            currentSystem = system;
+            
+            // Cập nhật trạng thái active của các nút nút
+            const buttons = document.querySelectorAll('#system-filters button');
+            buttons.forEach(btn => {
+                btn.classList.remove('bg-blue-600', 'text-white', 'shadow-sm');
+                btn.classList.add('bg-gray-100', 'text-gray-600');
+            });
+
+            const activeId = system === 'ALL' ? 'btn-all' : `btn-${system}`;
+            const activeBtn = document.getElementById(activeId);
+            if(activeBtn) {
+                activeBtn.classList.remove('bg-gray-100', 'text-gray-600');
+                activeBtn.classList.add('bg-blue-600', 'text-white', 'shadow-sm');
+            }
+
+            renderCriteria();
+        }
+
+        // Render cấu trúc thẻ tiêu chuẩn ra màn hình
+        function renderCriteria() {
+            const stoppContainer = document.getElementById('stopp-container');
+            const startContainer = document.getElementById('start-container');
+            
+            stoppContainer.innerHTML = '';
+            startContainer.innerHTML = '';
+
+            let stoppCount = 0;
+            let startCount = 0;
+
+            const filteredData = currentSystem === "ALL" 
+                ? criteriaData 
+                : criteriaData.filter(item => item.system === currentSystem);
+
+            filteredData.forEach(item => {
+                const card = document.createElement('div');
+                const borderClass = item.priority === 'HIGH' ? 'crit-high' : 'crit-med';
+                
+                card.className = `bg-white p-4 rounded-xl shadow-xs border border-gray-200 ${borderClass} transition hover:shadow-md`;
+                card.innerHTML = `
+                    <div class="flex justify-between items-start mb-1">
+                        <span class="text-xs font-bold px-2 py-0.5 rounded bg-gray-100 text-gray-600">${item.id}</span>
+                        <span class="text-xs font-semibold uppercase ${item.priority === 'HIGH' ? 'text-red-500' : 'text-amber-500'}">
+                            ${item.priority === 'HIGH' ? '⚠️ Ưu tiên cao' : '⚠️ Thận trọng'}
+                        </span>
+                    </div>
+                    <h3 class="font-bold text-gray-900 text-base mb-1">${item.title}</h3>
+                    <p class="text-sm text-gray-600 mb-2">${item.desc}</p>
+                    <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-100 text-xs text-slate-700">
+                        <strong class="text-blue-900">Lưu ý ICU:</strong> ${item.icu_note}
+                    </div>
+                `;
+
+                if (item.type === "STOPP") {
+                    stoppContainer.appendChild(card);
+                    stoppCount++;
+                } else {
+                    startContainer.appendChild(card);
+                    startCount++;
+                }
+            });
+
+            document.getElementById('stopp-count').innerText = stoppCount;
+            document.getElementById('start-count').innerText = startCount;
+        }
+
+        // Chạy ứng dụng
+        initFilters();
+        renderCriteria();
+    </script>
+</body>
+</html>
